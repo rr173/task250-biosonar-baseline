@@ -7,8 +7,11 @@ import (
 )
 
 // SaveFeature stores the extracted feature vector for an echo window,
-// replacing any prior extraction.
+// replacing any prior extraction. A sealed batch rejects the write.
 func (s *Store) SaveFeature(echoID int64, fv model.FeatureVector) error {
+	if err := s.assertEchoBatchOpen(echoID); err != nil {
+		return err
+	}
 	_, err := s.db.Exec(
 		`INSERT INTO echo_features(echo_id, feature) VALUES(?,?)
 		 ON CONFLICT(echo_id) DO UPDATE SET feature=excluded.feature`,

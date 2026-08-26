@@ -111,6 +111,21 @@ func (s *Store) assertBatchOpen(id int64) error {
 	return nil
 }
 
+// assertEchoBatchOpen resolves the owning batch of an echo window and rejects
+// writes when that batch is sealed. A sealed batch freezes every echo,
+// classification, feature and segment belonging to it.
+func (s *Store) assertEchoBatchOpen(echoID int64) error {
+	var batchID int64
+	err := s.db.QueryRow(`SELECT batch_id FROM echo_windows WHERE id=?`, echoID).Scan(&batchID)
+	if err == sql.ErrNoRows {
+		return model.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return s.assertBatchOpen(batchID)
+}
+
 // LastEchoTimestamp returns the most recent ping timestamp for a batch, used to
 // reject time-regressing ingests. It returns the zero time when none exist.
 func (s *Store) LastEchoTimestamp(batchID int64) (time.Time, error) {

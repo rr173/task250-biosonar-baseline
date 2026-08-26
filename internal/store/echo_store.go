@@ -128,8 +128,13 @@ func (s *Store) ListEchoes(batchID int64) ([]model.EchoWindow, error) {
 	return out, rows.Err()
 }
 
-// UpdateEchoStatus validates and applies an echo status transition.
+// UpdateEchoStatus validates and applies an echo status transition. A sealed
+// batch rejects every echo mutation; the status transition is checked only
+// after the batch is confirmed open.
 func (s *Store) UpdateEchoStatus(id int64, to model.EchoStatus) error {
+	if err := s.assertEchoBatchOpen(id); err != nil {
+		return err
+	}
 	e, err := s.GetEcho(id)
 	if err != nil {
 		return err
@@ -142,7 +147,8 @@ func (s *Store) UpdateEchoStatus(id int64, to model.EchoStatus) error {
 }
 
 // SaveCorrectedGeometry persists the geometry correction output and moves the
-// echo to "corrected".
+// echo to "corrected". A sealed batch rejects the write (guarded by the
+// status transition inside UpdateEchoStatus).
 func (s *Store) SaveCorrectedGeometry(e *model.EchoWindow) error {
 	if e.CorrectedAt == nil {
 		return fmt.Errorf("%w: no correction applied", model.ErrInvalidAttitude)

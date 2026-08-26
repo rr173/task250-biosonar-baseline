@@ -7,8 +7,12 @@ import (
 	"task250-biosonar/internal/model"
 )
 
-// SaveClassification upserts the posterior for one echo window.
+// SaveClassification upserts the posterior for one echo window. A sealed batch
+// rejects the write so published interpretation data stays immutable.
 func (s *Store) SaveClassification(c *classify.Classification) error {
+	if err := s.assertEchoBatchOpen(c.EchoID); err != nil {
+		return err
+	}
 	_, err := s.db.Exec(
 		`INSERT INTO classifications(echo_id, substrate_id, code, probability, uncertainty, result_json)
 		 VALUES(?,?,?,?,?,?)

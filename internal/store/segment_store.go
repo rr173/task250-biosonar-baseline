@@ -10,8 +10,13 @@ import (
 // ReplaceSegments atomically deletes existing segments/boundaries for a batch
 // and inserts the freshly merged set, returning the new segment IDs in order.
 // Boundaries reference a segment by its StartSeq, which is resolved to the
-// generated segment ID within the same transaction.
+// generated segment ID within the same transaction. A sealed batch (or one with
+// a published snapshot) rejects the write so published segment evidence stays
+// immutable.
 func (s *Store) ReplaceSegments(batchID int64, segs []model.SubstrateSegment, bounds []segment.Boundary) ([]int64, error) {
+	if err := s.assertBatchOpen(batchID); err != nil {
+		return nil, err
+	}
 	var published int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM snapshots WHERE batch_id=? AND status=?`, batchID, string(model.SnapPublished)).Scan(&published); err != nil {
 		return nil, err
@@ -97,10 +102,14 @@ func (s *Store) ListSegments(batchID int64) ([]model.SubstrateSegment, error) {
 	return out, rows.Err()
 }
 
-// UpdateSegmentStatus validates and applies a segment status transition.
+// UpdateSegmentStatus validates and applies a segment status transition. A
+// sealed batch rejects the write.
 func (s *Store) UpdateSegmentStatus(id int64, to model.SegmentStatus) error {
 	seg, err := s.GetSegment(id)
 	if err != nil {
+		return err
+	}
+	if err := s.assertBatchOpen(seg.BatchID); err != nil {
 		return err
 	}
 	if err := model.TransitionSegment(seg.Status, to); err != nil {
