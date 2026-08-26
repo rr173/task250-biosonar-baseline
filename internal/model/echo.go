@@ -86,6 +86,13 @@ func (e *EchoWindow) Validate() error {
 		math.IsInf(e.PosX, 0) || math.IsInf(e.PosY, 0) {
 		return ErrInvalidPosition
 	}
+	// Non-finite attitude values would make the geometric correction yield
+	// non-finite coordinates or depth, so the ping must be rejected at
+	// ingest time rather than persisted as a half-corrected record.
+	if !finite(e.Attitude.Pitch) || !finite(e.Attitude.Roll) ||
+		!finite(e.Attitude.Heading) || !finite(e.Attitude.Heave) {
+		return ErrInvalidAttitude
+	}
 	if !finite(e.SoundVelocity) || e.SoundVelocity <= 0 {
 		return ErrInvalidAttitude
 	}
