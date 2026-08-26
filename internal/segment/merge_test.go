@@ -42,6 +42,33 @@ func TestMergeExcludedBreaksRun(t *testing.T) {
 	}
 }
 
+// A missing intermediate ping — present in the survey line but absent from the
+// classified set (never classified, or its posterior was dropped) — leaves a
+// sequence hole. Two runs of the same substrate on either side must NOT be
+// fused across it: the gap has to break continuity so the data hole stays
+// visible instead of being papered over by one continuous segment.
+func TestMergeGapBreaksContinuity(t *testing.T) {
+	pings := []ClassifiedPing{
+		{Seq: 0, SubstrateID: 1, Probability: 0.9},
+		{Seq: 1, SubstrateID: 1, Probability: 0.92},
+		{Seq: 2, SubstrateID: 1, Probability: 0.88},
+		// Seq 3 missing: ping exists in the survey line but has no classification.
+		{Seq: 4, SubstrateID: 1, Probability: 0.91},
+		{Seq: 5, SubstrateID: 1, Probability: 0.9},
+	}
+	segs := Merge(1, pings, DefaultMergeConfig())
+	if len(segs) != 2 {
+		t.Fatalf("gap should split same-substrate run, want 2 segments got %d", len(segs))
+	}
+	if segs[0].SubstrateID != 1 || segs[1].SubstrateID != 1 {
+		t.Fatalf("both sides are substrate 1, got %d %d", segs[0].SubstrateID, segs[1].SubstrateID)
+	}
+	if segs[0].EndSeq != 2 || segs[1].StartSeq != 4 {
+		t.Fatalf("gap not preserved: seg0=%d-%d seg1=%d-%d",
+			segs[0].StartSeq, segs[0].EndSeq, segs[1].StartSeq, segs[1].EndSeq)
+	}
+}
+
 func TestBoundaries(t *testing.T) {
 	segs := []model.SubstrateSegment{
 		{ID: 1, SubstrateID: 1, StartSeq: 0, EndSeq: 2, Status: model.SegContinuous},

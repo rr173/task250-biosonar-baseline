@@ -39,7 +39,12 @@ type builder struct {
 
 // Merge turns an ordered set of classified pings into contiguous seafloor
 // segments. Excluded pings break continuity; substrate changes or low
-// probability also end the current run.
+// probability also end the current run. Continuity additionally requires that
+// each ping immediately follow its predecessor in sequence (Seq == prev.Seq+1):
+// a missing ping — one that was never classified, or whose classification was
+// dropped — leaves a hole in the survey line. Such a gap must end the current
+// run even when both sides carry the same substrate, otherwise the two runs
+// would be fused into one continuous segment and the data hole would be hidden.
 func Merge(batchID int64, pings []ClassifiedPing, cfg MergeConfig) []model.SubstrateSegment {
 	ordered := make([]ClassifiedPing, len(pings))
 	copy(ordered, pings)
@@ -82,7 +87,11 @@ func Merge(batchID int64, pings []ClassifiedPing, cfg MergeConfig) []model.Subst
 			cur = &builder{substrateID: p.SubstrateID, startSeq: p.Seq, endSeq: p.Seq, sumProb: p.Probability, count: 1}
 			continue
 		}
-		if cur.substrateID != p.SubstrateID || p.Probability < cfg.UncertaintyThreshold {
+		// A gap in the ping sequence means an intermediate ping is missing from
+		// the classified set (never classified, or its classification was
+		// dropped). The two runs cannot be joined across the hole regardless of
+		// substrate: flush and start a fresh run so the gap stays visible.
+		if p.Seq != cur.endSeq+1 || cur.substrateID != p.SubstrateID || p.Probability < cfg.UncertaintyThreshold {
 			flush()
 			cur = &builder{substrateID: p.SubstrateID, startSeq: p.Seq, endSeq: p.Seq, sumProb: p.Probability, count: 1}
 			continue
