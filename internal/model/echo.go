@@ -110,6 +110,14 @@ func (e *EchoWindow) Validate() error {
 			if !finite(depth) || !finite(c.Amplitudes[i]) {
 				return ErrEmptyChannels
 			}
+			// Each channel's samples must be strictly increasing down the
+			// water column: an inverted or repeated profile makes the
+			// penetration depth (and thus the substrate verdict) depend on
+			// input ordering, so an illegal profile is rejected at ingestion
+			// rather than silently classified.
+			if i > 0 && depth <= c.Depths[i-1] {
+				return ErrEmptyChannels
+			}
 		}
 	}
 	return nil
