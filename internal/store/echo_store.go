@@ -23,7 +23,7 @@ func (s *Store) InsertEcho(e *model.EchoWindow) (int64, error) {
 		return 0, err
 	}
 	if !last.IsZero() && e.Timestamp.Before(last) {
-		return 0, fmt.Errorf("%w: ping %d predates %s", model.ErrTimeRegress, e.PingSeq, last.Format(time.RFC3339))
+		return 0, fmt.Errorf("%w: ping %d predates %s", model.ErrTimeRegress, e.PingSeq, last.Format(time.RFC3339Nano))
 	}
 	chJSON := jsonBytes(e.Channels)
 	attJSON := jsonBytes(e.Attitude)
@@ -33,7 +33,7 @@ func (s *Store) InsertEcho(e *model.EchoWindow) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO echo_windows(batch_id, ping_seq, pos_x, pos_y, ts, attitude, sound_velocity, slant_range, status, channels)
 		 VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		e.BatchID, e.PingSeq, e.PosX, e.PosY, e.Timestamp.UTC().Format(time.RFC3339),
+		e.BatchID, e.PingSeq, e.PosX, e.PosY, formatTimestamp(e.Timestamp),
 		string(attJSON), e.SoundVelocity, e.SlantRange, string(e.Status), string(chJSON))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -155,6 +155,6 @@ func (s *Store) SaveCorrectedGeometry(e *model.EchoWindow) error {
 	}
 	_, err := s.db.Exec(
 		`UPDATE echo_windows SET corrected_x=?, corrected_y=?, corrected_depth=?, corrected_at=? WHERE id=?`,
-		e.CorrectedX, e.CorrectedY, e.CorrectedDepth, e.CorrectedAt.UTC().Format(time.RFC3339Nano), e.ID)
+		e.CorrectedX, e.CorrectedY, e.CorrectedDepth, formatTimestamp(*e.CorrectedAt), e.ID)
 	return err
 }
