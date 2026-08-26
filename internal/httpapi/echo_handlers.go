@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -30,9 +31,14 @@ func (s *Server) ingestEcho(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("batch_id is required"))
 		return
 	}
-	ts := time.Now().UTC()
-	if parsed, err := time.Parse(time.RFC3339Nano, req.Timestamp); err == nil {
-		ts = parsed
+	// A ping's capture time is part of the measurement, not a server-side
+	// bookkeeping field. A missing or ill-formatted timestamp must be rejected
+	// outright — never silently rewritten to the server's clock, and never
+	// persisted. Only RFC 3339 timestamps survive this gate.
+	ts, err := time.Parse(time.RFC3339Nano, req.Timestamp)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("%w: %v", model.ErrInvalidTimestamp, err))
+		return
 	}
 	e := &model.EchoWindow{
 		BatchID:       req.BatchID,
