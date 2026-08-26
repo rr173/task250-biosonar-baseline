@@ -24,13 +24,25 @@ type FeatureVector []float64
 // FeatureDim is the expected length of a FeatureVector.
 const FeatureDim = 4
 
-// Validate checks that the substrate model is well formed.
+// Validate checks that the substrate model is well formed: a finite
+// FeatureDim centroid and a positive, finite, FeatureDim diagonal covariance.
+// A model whose covariance is zero or non-finite (NaN/Inf), or whose centroid
+// is non-finite, would yield NaN/-Inf likelihoods that silently corrupt the
+// posterior, so such parameters are rejected outright — the model cannot be
+// saved and must not pollute classification results.
 func (s *SubstrateType) Validate() error {
 	if len(s.Centroid) != FeatureDim || len(s.CovDiag) != FeatureDim {
 		return ErrUnknownSubstrate
 	}
+	for _, v := range s.Centroid {
+		if !finite(v) {
+			return ErrUnknownSubstrate
+		}
+	}
 	for _, v := range s.CovDiag {
-		if v <= 0 {
+		// `v <= 0` alone admits NaN (NaN <= 0 is false) and +Inf, so require
+		// finiteness first, then strict positivity.
+		if !finite(v) || v <= 0 {
 			return ErrUnknownSubstrate
 		}
 	}

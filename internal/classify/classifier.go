@@ -47,11 +47,17 @@ func Classify(echoID int64, fv model.FeatureVector, subs []model.SubstrateType) 
 		return nil, model.ErrUnknownSubstrate
 	}
 	results := make([]Result, 0, len(subs))
-	maxLL := math.Inf(-1)
+	// Validate every substrate before computing any likelihood so an illegal
+	// model (non-finite centroid / non-positive or non-finite covariance) can
+	// never contribute a NaN/-Inf term — it is rejected outright rather than
+	// producing a plausible-looking but unusable posterior.
 	for _, s := range subs {
 		if err := s.Validate(); err != nil {
 			return nil, err
 		}
+	}
+	maxLL := math.Inf(-1)
+	for _, s := range subs {
 		ll := gaussianLogLik(fv, s)
 		results = append(results, Result{
 			SubstrateID:   s.ID,
